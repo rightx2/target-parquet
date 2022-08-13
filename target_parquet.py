@@ -35,10 +35,10 @@ def flatten(dictionary, parent_key = '', sep = '__'):
                                    'key_4': {
                                           'key_5': 3,
                                           'key_6' : ['10', '11']
-                                     }     
+                                     }
                             }
                            }
-        By calling the function with the dictionary above as parameter, you will get the following strucure:  
+        By calling the function with the dictionary above as parameter, you will get the following strucure:
             {
                  'key_1': 1,
                  'key_2__key_3': 2,
@@ -54,7 +54,7 @@ def flatten(dictionary, parent_key = '', sep = '__'):
         else:
             items.append((new_key, str(v) if type(v) is list else v))
     return dict(items)
-        
+
 def persist_messages(messages, destination_path, compression_method = None):
     state = None
     schemas = {}
@@ -68,9 +68,9 @@ def persist_messages(messages, destination_path, compression_method = None):
             message = singer.parse_message(message).asdict()
         except json.decoder.JSONDecodeError:
             raise Exception("Unable to parse:\n{}".format(message))
-        
+
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-        
+
         message_type = message['type']
         if message_type == 'STATE':
             LOGGER.debug('Setting state to {}'.format(message['value']))
@@ -97,14 +97,15 @@ def persist_messages(messages, destination_path, compression_method = None):
         return state
     # Create a dataframe out of the record list and store it into a parquet file with the timestamp in the name.
     dataframe = pd.DataFrame(records)
-    filename =  stream_name + '-' + timestamp + '.parquet'
-    filepath = os.path.expanduser(os.path.join(destination_path, filename))
+    # filename =  stream_name + '-' + timestamp + '.parquet'
+    # filepath = os.path.expanduser(os.path.join(destination_path, filename))
+    filepath = destination_path
     if compression_method:
-        # The target is prepared to accept all the compression methods provided by the pandas module, with the mapping below, 
-        # but, at the moment, pyarrow only allow gzip compression. 
+        # The target is prepared to accept all the compression methods provided by the pandas module, with the mapping below,
+        # but, at the moment, pyarrow only allow gzip compression.
         extension_mapping = {
             'gzip' : '.gz',
-            'bz2'  : '.bz2', 
+            'bz2'  : '.bz2',
             'zip'  : '.zip',
             'xz'   : '.xz'
         }
@@ -134,7 +135,7 @@ def send_usage_stats():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', help = 'Config file')
-    
+
     args = parser.parse_args()
     if args.config:
         with open(args.config) as input_json:
