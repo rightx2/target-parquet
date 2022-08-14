@@ -60,10 +60,10 @@ def flatten(dictionary, parent_key="", sep="__"):
 
 def persist_messages(messages, destination_path, compression_method=None):
     state = None
-    schemas = {}
-    key_properties = {}
-    headers = {}
-    validators = {}
+    schema = None
+    # key_properties = {}
+    # headers = {}
+    # validators = {}
     records = []  #  A list of dictionaries that will contain the records that are retrieved from the tap
 
     for message in messages:
@@ -72,7 +72,7 @@ def persist_messages(messages, destination_path, compression_method=None):
         except json.decoder.JSONDecodeError:
             raise Exception("Unable to parse:\n{}".format(message))
 
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        # timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
 
         message_type = message["type"]
         if message_type == "STATE":
@@ -80,28 +80,32 @@ def persist_messages(messages, destination_path, compression_method=None):
             state = message["value"]
         elif message_type == "SCHEMA":
             stream = message["stream"]
-            schemas[stream] = message["schema"]
-            validators[stream] = Draft4Validator(message["schema"])
-            key_properties[stream] = message["key_properties"]
+            schema = message["schema"]
+            # validators[stream] = Draft4Validator(message["schema"])
+            # key_properties[stream] = message["key_properties"]
         elif message_type == "RECORD":
-            if message["stream"] not in schemas:
-                raise Exception(
-                    "A record for stream {} was encountered before a corresponding schema".format(message["stream"])
-                )
-            stream_name = message["stream"]
-            validators[message["stream"]].validate(message["record"])
+            # if message["stream"] not in schemas:
+            #     raise Exception(
+            #         "A record for stream {} was encountered before a corresponding schema".format(message["stream"])
+            #     )
+            # stream_name = message["stream"]
+            # validators[stream_name].validate(message["record"])
             # flattened_record = flatten(message["record"])
             # Once the record is flattenned, it is added to the final record list, which will be stored in the parquet file.
             records.append(message["record"])
+            # records.append(flattened_record)
             state = None
         else:
             LOGGER.warning("Unknown message type {} in message {}".format(message["type"], message))
+
     if len(records) == 0:
         # If there are not any records retrieved, it is not necessary to create a file.
         LOGGER.info("There were not any records retrieved.")
         return state
+
     # Create a dataframe out of the record list and store it into a parquet file with the timestamp in the name.
     dataframe = pd.DataFrame(records)
+    dataframe = dataframe.astype(schema)
     # filename =  stream_name + '-' + timestamp + '.parquet'
     # filepath = os.path.expanduser(os.path.join(destination_path, filename))
     filepath = destination_path
