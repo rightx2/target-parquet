@@ -109,6 +109,10 @@ def persist_messages(messages, destination_path, compression_method=None):
     # filename =  stream_name + '-' + timestamp + '.parquet'
     # filepath = os.path.expanduser(os.path.join(destination_path, filename))
     filepath = destination_path
+    if not filepath.endswith(".parquet"):
+        from uuid import uuid4
+        filepath = os.path.join(filepath, uuid4() + ".parquet")
+
     if compression_method:
         # The target is prepared to accept all the compression methods provided by the pandas module, with the mapping below,
         # but, at the moment, pyarrow only allow gzip compression.
