@@ -58,6 +58,28 @@ def flatten(dictionary, parent_key="", sep="__"):
     return dict(items)
 
 
+def jsonschema_to_dataframe_schema(json_schema):
+    properties = json_schema["properties"]
+    pandas_target_schema = {}
+    for field_name, dtype_dict in properties.items():
+        if dtype_dict.get("type"):
+            if dtype_dict["type"] == "integer":
+                pandas_target_schema[field_name] = "Int64"
+            elif dtype_dict["type"] == "number":
+                pandas_target_schema[field_name] = "Float64"
+            elif dtype_dict["type"] == "string":
+                pandas_target_schema[field_name] = "string"
+            elif dtype_dict["type"] == "boolean":
+                pandas_target_schema[field_name] = "boolean"
+            elif dtype_dict["type"] == "array":
+                pandas_target_schema[field_name] = "object"
+            else:
+                raise Exception("Unknown dtype: {}".format(dtype_dict.get("type")))
+        else:
+            pandas_target_schema[field_name] = "object"
+    return pandas_target_schema
+
+
 def persist_messages(messages, destination_path, compression_method=None):
     state = None
     schema = None
@@ -105,12 +127,13 @@ def persist_messages(messages, destination_path, compression_method=None):
 
     # Create a dataframe out of the record list and store it into a parquet file with the timestamp in the name.
     dataframe = pd.DataFrame(records)
-    dataframe = dataframe.astype(schema)
+    dataframe = dataframe.astype(jsonschema_to_dataframe_schema(schema))
     # filename =  stream_name + '-' + timestamp + '.parquet'
     # filepath = os.path.expanduser(os.path.join(destination_path, filename))
     filepath = destination_path
     if not filepath.endswith(".parquet"):
         from uuid import uuid4
+
         filepath = os.path.join(filepath, uuid4() + ".parquet")
 
     if compression_method:
