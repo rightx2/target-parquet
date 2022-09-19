@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
 import argparse
 import collections
-import csv
-from datetime import datetime
 import io
 import http.client
 import json
-from jsonschema.validators import Draft4Validator
 import os
 import pandas as pd
 import pkg_resources
-import pyarrow
 import singer
 import sys
 import urllib
