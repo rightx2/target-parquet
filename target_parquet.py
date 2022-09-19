@@ -55,25 +55,28 @@ def flatten(dictionary, parent_key="", sep="__"):
 
 
 def jsonschema_to_dataframe_schema(json_schema):
-    properties = json_schema["properties"]
-    pandas_target_schema = {}
-    for field_name, dtype_dict in properties.items():
-        if dtype_dict.get("type"):
-            if dtype_dict["type"] == "integer":
-                pandas_target_schema[field_name] = "Int64"
-            elif dtype_dict["type"] == "number":
-                pandas_target_schema[field_name] = "Float64"
-            elif dtype_dict["type"] == "string":
-                pandas_target_schema[field_name] = "string"
-            elif dtype_dict["type"] == "boolean":
-                pandas_target_schema[field_name] = "boolean"
-            elif dtype_dict["type"] == "array":
-                pandas_target_schema[field_name] = "object"
+    properties = json_schema.get("properties")
+    if properties is not None:
+        pandas_target_schema = {}
+        for field_name, dtype_dict in properties.items():
+            if dtype_dict.get("type"):
+                if dtype_dict["type"] == "integer":
+                    pandas_target_schema[field_name] = "Int64"
+                elif dtype_dict["type"] == "number":
+                    pandas_target_schema[field_name] = "Float64"
+                elif dtype_dict["type"] == "string":
+                    pandas_target_schema[field_name] = "string"
+                elif dtype_dict["type"] == "boolean":
+                    pandas_target_schema[field_name] = "boolean"
+                elif dtype_dict["type"] == "array":
+                    pandas_target_schema[field_name] = "object"
+                else:
+                    raise Exception("Unknown dtype: {}".format(dtype_dict.get("type")))
             else:
-                raise Exception("Unknown dtype: {}".format(dtype_dict.get("type")))
-        else:
-            pandas_target_schema[field_name] = "object"
-    return pandas_target_schema
+                pandas_target_schema[field_name] = "object"
+        return pandas_target_schema
+    else:
+        return {}
 
 
 def persist_messages(messages, destination_path, compression_method=None):
