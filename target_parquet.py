@@ -12,6 +12,9 @@ import sys
 import urllib
 import threading
 
+from uuid import uuid4
+
+
 LOGGER = singer.get_logger()
 
 
@@ -79,7 +82,7 @@ def jsonschema_to_dataframe_schema(json_schema):
         return {}
 
 
-def persist_messages(messages, destination_path, compression_method=None):
+def persist_messages(messages, destination_path, destination_partition_path, file_name, compression_method):
     state = None
     schema = None
     # key_properties = {}
@@ -93,14 +96,12 @@ def persist_messages(messages, destination_path, compression_method=None):
         except json.decoder.JSONDecodeError:
             raise Exception("Unable to parse:\n{}".format(message))
 
-        # timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-
         message_type = message["type"]
         if message_type == "STATE":
             LOGGER.debug("Setting state to {}".format(message["value"]))
             state = message["value"]
         elif message_type == "SCHEMA":
-            stream = message["stream"]
+            stream_name = message["stream"]
             schema = message["schema"]
             # validators[stream] = Draft4Validator(message["schema"])
             # key_properties[stream] = message["key_properties"]
@@ -109,7 +110,7 @@ def persist_messages(messages, destination_path, compression_method=None):
             #     raise Exception(
             #         "A record for stream {} was encountered before a corresponding schema".format(message["stream"])
             #     )
-            # stream_name = message["stream"]
+            stream_name = message["stream"]
             # validators[stream_name].validate(message["record"])
             # flattened_record = flatten(message["record"])
             # Once the record is flattenned, it is added to the final record list, which will be stored in the parquet file.
@@ -129,9 +130,13 @@ def persist_messages(messages, destination_path, compression_method=None):
     dataframe = dataframe.astype(jsonschema_to_dataframe_schema(schema))
     # filename =  stream_name + '-' + timestamp + '.parquet'
     # filepath = os.path.expanduser(os.path.join(destination_path, filename))
-    filepath = destination_path
-    if not filepath.endswith(".parquet"):
-        from uuid import uuid4
+    filepath = os.path.join(destination_path, stream_name)
+    if destination_partition_path:
+        filepath = os.path.join(filepath, destination_partition_path)
+
+    if file_name:
+        filepath = os.path.join(filepath, file_name)
+    else:
         filepath = os.path.join(filepath, str(uuid4()) + ".parquet")
 
     if compression_method:
@@ -184,7 +189,13 @@ def main():
         threading.Thread(target=send_usage_stats).start()
     # The target expects that the tap generates UTF-8 encoded text.
     input_messages = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8")
-    state = persist_messages(input_messages, config.get("destination_path", ""), config.get("compression_method"))
+    state = persist_messages(
+        input_messages,
+        destination_path=config["destination_path"],
+        destination_partition_path=config.get("destination_partition_path", ""),
+        file_name=config.get("file_name", ""),
+        compression_method=config.get("compression_method")
+    )
 
     emit_state(state)
     LOGGER.debug("Exiting normally")
