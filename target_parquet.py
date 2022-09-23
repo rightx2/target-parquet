@@ -82,14 +82,41 @@ def jsonschema_to_dataframe_schema(json_schema):
         return {}
 
 
+def save_data(
+    records, schema, destination_path, stream_name, destination_partition_path, file_name, compression_method
+):
+    if len(records) == 0:
+        LOGGER.info("There were not any records retrieved.")
+    else:
+        # Create a dataframe out of the record list and store it into a parquet file with the timestamp in the name.
+        df = pd.DataFrame(records)
+        df = df.astype(jsonschema_to_dataframe_schema(schema))
+
+        if not file_name:
+            file_name = str(uuid4()) + ".parquet"
+
+        if destination_partition_path:
+            filepath = os.path.join(destination_path, stream_name, destination_partition_path, file_name)
+        else:
+            filepath = os.path.join(destination_path, stream_name, file_name)
+
+        if compression_method:
+            # The target is prepared to accept all the compression methods provided by the pandas module, with the mapping below,
+            # but, at the moment, pyarrow only allow gzip compression.
+            extension_mapping = {"gzip": ".gz", "bz2": ".bz2", "zip": ".zip", "xz": ".xz"}
+            df.to_parquet(
+                filepath + extension_mapping[compression_method], engine="pyarrow", compression=compression_method
+            )
+        else:
+            df.to_parquet(filepath, engine="pyarrow")
+
+
 def persist_messages(messages, destination_path, destination_partition_path, file_name, compression_method):
     state = None
     schema = None
-    # key_properties = {}
-    # headers = {}
-    # validators = {}
-    records = []  #  A list of dictionaries that will contain the records that are retrieved from the tap
 
+    current_stream_name = None
+    records = []
     for message in messages:
         try:
             message = singer.parse_message(message).asdict()
@@ -100,54 +127,40 @@ def persist_messages(messages, destination_path, destination_partition_path, fil
         if message_type == "STATE":
             LOGGER.debug("Setting state to {}".format(message["value"]))
             state = message["value"]
+            return state
+
+        elif message_type == "RECORD":
+            stream_name = message["stream"]
+            if current_stream_name is None or (current_stream_name is not None and current_stream_name != stream_name):
+                raise Exception("You must send schema first before sending records")
+            records.append(message["record"])
+
         elif message_type == "SCHEMA":
             stream_name = message["stream"]
             schema = message["schema"]
-            # validators[stream] = Draft4Validator(message["schema"])
-            # key_properties[stream] = message["key_properties"]
-        elif message_type == "RECORD":
-            # if message["stream"] not in schemas:
-            #     raise Exception(
-            #         "A record for stream {} was encountered before a corresponding schema".format(message["stream"])
-            #     )
-            stream_name = message["stream"]
-            # validators[stream_name].validate(message["record"])
-            # flattened_record = flatten(message["record"])
-            # Once the record is flattenned, it is added to the final record list, which will be stored in the parquet file.
-            records.append(message["record"])
-            # records.append(flattened_record)
-            state = None
+            if current_stream_name != stream_name:
+                save_data(
+                    records,
+                    schema,
+                    destination_path,
+                    stream_name,
+                    destination_partition_path,
+                    file_name,
+                    compression_method,
+                )
+
+            current_stream_name = stream_name
+            records = []
+
         else:
-            LOGGER.warning("Unknown message type {} in message {}".format(message["type"], message))
+            raise Exception(
+                "Unknown message type {} in message {}. Message type should be one of {}".format(
+                    message["type"], message, ", ".join(["RECORD", "STATE", "SCHEMA"])
+                )
+            )
 
-    if len(records) == 0:
-        # If there are not any records retrieved, it is not necessary to create a file.
-        LOGGER.info("There were not any records retrieved.")
-        return state
+    save_data(records, schema, destination_path, stream_name, destination_partition_path, file_name, compression_method)
 
-    # Create a dataframe out of the record list and store it into a parquet file with the timestamp in the name.
-    dataframe = pd.DataFrame(records)
-    dataframe = dataframe.astype(jsonschema_to_dataframe_schema(schema))
-    # filename =  stream_name + '-' + timestamp + '.parquet'
-    # filepath = os.path.expanduser(os.path.join(destination_path, filename))
-    filepath = os.path.join(destination_path, stream_name)
-    if destination_partition_path:
-        filepath = os.path.join(filepath, destination_partition_path)
-
-    if file_name:
-        filepath = os.path.join(filepath, file_name)
-    else:
-        filepath = os.path.join(filepath, str(uuid4()) + ".parquet")
-
-    if compression_method:
-        # The target is prepared to accept all the compression methods provided by the pandas module, with the mapping below,
-        # but, at the moment, pyarrow only allow gzip compression.
-        extension_mapping = {"gzip": ".gz", "bz2": ".bz2", "zip": ".zip", "xz": ".xz"}
-        dataframe.to_parquet(
-            filepath + extension_mapping[compression_method], engine="pyarrow", compression=compression_method
-        )
-    else:
-        dataframe.to_parquet(filepath, engine="pyarrow")
     return state
 
 
@@ -194,7 +207,7 @@ def main():
         destination_path=config["destination_path"],
         destination_partition_path=config.get("destination_partition_path", ""),
         file_name=config.get("file_name", ""),
-        compression_method=config.get("compression_method")
+        compression_method=config.get("compression_method"),
     )
 
     emit_state(state)
