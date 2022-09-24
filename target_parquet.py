@@ -137,19 +137,18 @@ def persist_messages(messages, destination_path, destination_partition_path, fil
 
         elif message_type == "SCHEMA":
             stream_name = message["stream"]
-            schema = message["schema"]
             if current_stream_name != stream_name:
                 save_data(
                     records,
                     schema,
                     destination_path,
-                    stream_name,
+                    current_stream_name,
                     destination_partition_path,
                     file_name,
                     compression_method,
                 )
-
             current_stream_name = stream_name
+            schema = message["schema"]
             records = []
 
         else:
