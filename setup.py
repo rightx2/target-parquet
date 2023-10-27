@@ -11,7 +11,7 @@ setup(name = 'target-parquet',
       py_modules = ['target_parquet'],
        install_requires=[
           'singer-python>=5.0.12',
-          'pandas==1.4.3',
+          'pandas',
           'pyarrow==6.0.1'
        ],
 
